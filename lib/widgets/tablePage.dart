@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:geektrust/widgets/tableDataList.dart';
+import 'package:geektrust/widgets/tableFooter.dart';
 import 'package:http/http.dart' as http;
 import '../model/userModel.dart';
 
@@ -12,28 +14,69 @@ class TablePage extends StatefulWidget {
 
 class _TablePageState extends State<TablePage> {
   final List<UserModel> _tableData = [];
-
   List<UserModel> _filteredData = [];
   bool _selectAll = false;
   final List<UserModel> _selectedRows = [];
   int _currentPage = 1;
   int _totalPages = 1;
   final int _rowsPerPage = 10;
-
   final TextEditingController _searchController = TextEditingController();
 
   @override
-  initState() {
+  void initState() {
     super.initState();
     fetchData();
   }
 
-  /// update the total pages count
+  void fetchData() async {
+    try {
+      var apiUrl = Uri.parse(
+          'https://geektrust.s3-ap-southeast-1.amazonaws.com/adminui-problem/members.json');
+
+      var response = await http.get(apiUrl);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _tableData.clear();
+          var data = jsonDecode(response.body);
+          for (var item in data) {
+            _tableData.add(UserModel.fromJson(item));
+          }
+          _filteredData = List.from(_tableData);
+          _updateTotalPages();
+        });
+      } else {
+        throw Exception('Failed to fetch data');
+      }
+    } catch (error) {
+      _showErrorDialog('Failed to fetch data. Please try again later.');
+    }
+  }
+
+  void _showErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Error'),
+          content: Text(errorMessage),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _updateTotalPages() {
     _totalPages = (_filteredData.length / _rowsPerPage).ceil();
   }
 
-  /// filter the data based on the search term
   void _filterData(String searchTerm) {
     setState(() {
       if (searchTerm.isEmpty) {
@@ -51,18 +94,6 @@ class _TablePageState extends State<TablePage> {
     });
   }
 
-  /// delete the selected rows
-  void _deleteSelectedRows() {
-    setState(() {
-      _tableData.removeWhere((row) => _selectedRows.contains(row));
-      _filteredData.removeWhere((row) => _selectedRows.contains(row));
-      _selectedRows.clear();
-      _selectAll = false;
-      _updateTotalPages();
-    });
-  }
-
-  /// get the current page data
   List<UserModel> _getCurrentPageData() {
     final startIndex = (_currentPage - 1) * _rowsPerPage;
     final endIndex = startIndex + _rowsPerPage;
@@ -76,7 +107,6 @@ class _TablePageState extends State<TablePage> {
     return _filteredData.sublist(startIndex, endIndex);
   }
 
-  /// delete the row
   void _deleteRow(UserModel rowData) {
     setState(() {
       _tableData.remove(rowData);
@@ -84,34 +114,6 @@ class _TablePageState extends State<TablePage> {
       _selectedRows.remove(rowData);
       _updateTotalPages();
     });
-  }
-
-  /// fetch the data from the api
-  Future<dynamic> fetchData() async {
-    var apiUrl = Uri.parse(
-        'https://geektrust.s3-ap-southeast-1.amazonaws.com/adminui-problem/members.json');
-
-    try {
-      var response = await http.get(apiUrl);
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _tableData.clear();
-          var data = jsonDecode(response.body ?? '');
-          for (var item in data) {
-            _tableData.add(UserModel.fromJson(item));
-          }
-          _filteredData = List.from(_tableData);
-          _updateTotalPages();
-        });
-      } else {
-        // Request failed
-        print('Request failed with status: ${response.statusCode}');
-      }
-    } catch (e) {
-      // An error occurred
-      print('Error: $e');
-    }
   }
 
   void _editRow(UserModel rowData) {
@@ -168,6 +170,16 @@ class _TablePageState extends State<TablePage> {
     );
   }
 
+  void _deleteSelectedRows() {
+    setState(() {
+      _tableData.removeWhere((row) => _selectedRows.contains(row));
+      _filteredData.removeWhere((row) => _selectedRows.contains(row));
+      _selectedRows.clear();
+      _selectAll = false;
+      _updateTotalPages();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -177,7 +189,7 @@ class _TablePageState extends State<TablePage> {
       body: Column(
         children: [
           Container(
-            decoration: BoxDecoration(color: Colors.white),
+            decoration: const BoxDecoration(color: Colors.white),
             child: Padding(
               padding: const EdgeInsets.all(8.0),
               child: TextField(
@@ -191,12 +203,12 @@ class _TablePageState extends State<TablePage> {
           ),
           Container(
             decoration: BoxDecoration(color: Colors.white),
-            child: Padding(
-              padding: const EdgeInsets.only(
-                  left: 70, right: 24.0, top: 16, bottom: 16),
+            child: const Padding(
+              padding:
+              EdgeInsets.only(left: 70, right: 24.0, top: 16, bottom: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
+                children: [
                   Text("Name"),
                   Text("Email"),
                   Text("Role"),
@@ -205,161 +217,75 @@ class _TablePageState extends State<TablePage> {
               ),
             ),
           ),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _getCurrentPageData().length,
-              itemBuilder: (context, index) {
-                final rowData = _getCurrentPageData()[index];
-                return ListTile(
-                  tileColor: rowData.selected! ? Colors.grey[300] : null,
-                  leading: Checkbox(
-                    value: rowData.selected,
-                    onChanged: (value) {
-                      setState(() {
-                        rowData.selected = value!;
-                        if (value) {
-                          _selectedRows.add(rowData);
-                        } else {
-                          _selectedRows.remove(rowData);
-                        }
-                      });
-                    },
-                  ),
-                  title: Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      Expanded(
-                          flex: 3,
-                          child: Text(
-                            rowData.name!,
-                          )),
-                      Expanded(flex: 3, child: Text(rowData.email!)),
-                      Expanded(flex: 2, child: Text(rowData.role!)),
-                      const Spacer(),
-                      InkWell(
-                          onTap: () {
-                            _editRow(rowData);
-                          },
-                          child: const Icon(Icons.edit)),
-                      const SizedBox(width: 10),
-                      InkWell(
-                          onTap: () {
-                            _deleteRow(rowData);
-                          },
-                          child: const Icon(Icons.delete))
-                    ],
-                  ),
-                );
-              },
-              separatorBuilder: (BuildContext context, int index) {
-                return const Divider();
-              },
-            ),
+          TableDataList(
+            currentPageData: _getCurrentPageData(),
+            deleteRow: _deleteRow,
+            editRow: _editRow,
+            selectedRows: _selectedRows,
           ),
-          Container(
-            decoration: const BoxDecoration(color: Colors.white),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _selectAll,
-                        onChanged: (value) {
-                          setState(() {
-                            _selectAll = value!;
-                            // _selectedRows.clear();
-                            for (final rowData in _getCurrentPageData()) {
-                              rowData.selected = value;
-                              if (value) {
-                                _selectedRows.add(rowData);
-                              }
-                            }
-                          });
-                        },
-                      ),
-                      const Text('Select All'),
-                    ],
-                  ),
-                  ElevatedButton(
-                    onPressed:
-                        _selectedRows.isNotEmpty ? _deleteSelectedRows : null,
-                    child: const Text('Delete Selected'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            decoration: const BoxDecoration(color: Colors.white),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  onPressed: _currentPage > 1
-                      ? () {
-                          setState(() {
-                            _currentPage = 1;
-                            _selectAll = _getCurrentPageData()
-                                    .where(
-                                        (element) => element.selected == true)
-                                    .length ==
-                                _getCurrentPageData().length;
-                          });
-                        }
-                      : null,
-                  icon: const Icon(Icons.first_page),
-                ),
-                IconButton(
-                  onPressed: _currentPage > 1
-                      ? () {
-                          setState(() {
-                            _currentPage--;
-                            _selectAll = _getCurrentPageData()
-                                    .where(
-                                        (element) => element.selected == true)
-                                    .length ==
-                                _getCurrentPageData().length;
-                          });
-                        }
-                      : null,
-                  icon: const Icon(Icons.chevron_left),
-                ),
-                Text('Page $_currentPage of $_totalPages'),
-                IconButton(
-                  onPressed: _currentPage < _totalPages
-                      ? () {
-                          setState(() {
-                            _currentPage++;
-                            _selectAll = _getCurrentPageData()
-                                    .where(
-                                        (element) => element.selected == true)
-                                    .length ==
-                                _getCurrentPageData().length;
-                          });
-                        }
-                      : null,
-                  icon: const Icon(Icons.chevron_right),
-                ),
-                IconButton(
-                  onPressed: _currentPage < _totalPages
-                      ? () {
-                          setState(() {
-                            _currentPage = _totalPages;
-                            _selectAll = _getCurrentPageData()
-                                    .where(
-                                        (element) => element.selected == true)
-                                    .length ==
-                                _getCurrentPageData().length;
-                          });
-                        }
-                      : null,
-                  icon: const Icon(Icons.last_page),
-                ),
-              ],
-            ),
+          TableFooter(
+            currentPage: _currentPage,
+            totalPages: _totalPages,
+            selectAll: _selectAll,
+            deleteSelectedRows:
+            _selectedRows.isNotEmpty ? _deleteSelectedRows : null,
+            goToFirstPage: _currentPage > 1
+                ? () {
+              setState(() {
+                _currentPage = 1;
+                _selectAll = _getCurrentPageData()
+                    .where((element) => element.selected == true)
+                    .length ==
+                    _getCurrentPageData().length;
+              });
+            }
+                : null,
+            goToLastPage: _currentPage < _totalPages
+                ? () {
+              setState(() {
+                _currentPage = _totalPages;
+                _selectAll = _getCurrentPageData()
+                    .where((element) => element.selected == true)
+                    .length ==
+                    _getCurrentPageData().length;
+              });
+            }
+                : null,
+            goToNextPage: _currentPage < _totalPages
+                ? () {
+              setState(() {
+                _currentPage++;
+                _selectAll = _getCurrentPageData()
+                    .where((element) => element.selected == true)
+                    .length ==
+                    _getCurrentPageData().length;
+              });
+            }
+                : null,
+            goToPreviousPage: _currentPage > 1
+                ? () {
+              setState(() {
+                _currentPage--;
+                _selectAll = _getCurrentPageData()
+                    .where((element) => element.selected == true)
+                    .length ==
+                    _getCurrentPageData().length;
+              });
+            }
+                : null,
+            selectAllChanged: (value) {
+              setState(() {
+                _selectAll = value!;
+                for (final rowData in _getCurrentPageData()) {
+                  rowData.selected = value;
+                  if (value) {
+                    _selectedRows.add(rowData);
+                  } else {
+                    _selectedRows.remove(rowData);
+                  }
+                }
+              });
+            },
           ),
         ],
       ),

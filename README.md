@@ -1,10 +1,15 @@
 # geektrust
 
-A new Flutter project.
-
-## Getting Started
-
 This project is a starting point for a Flutter application.
+
+## Features
+
+- Display tabular data with customizable columns.
+- Filter data based on search terms.
+- Paginate through the data with previous and next page navigation.
+- Select individual rows or all rows.
+- Perform operations on selected rows, such as deletion.
+- Edit individual rows.
 
 A few resources to get you started if this is your first Flutter project:
 
